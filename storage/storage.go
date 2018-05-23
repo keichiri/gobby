@@ -13,6 +13,7 @@ type DirectoryHandler struct {
 	path             string
 	piecesPath       string
 	requestsMx       sync.Mutex
+	cache            *cache
 	retrieveRequests map[int][]chan<- *RetrieveResult
 }
 
@@ -40,6 +41,7 @@ func NewDirectoryHandler(path string) (*DirectoryHandler, error) {
 	handler := &DirectoryHandler{
 		path:             path,
 		piecesPath:       piecesPath,
+		cache:            newCache(30),
 		retrieveRequests: make(map[int][]chan<- *RetrieveResult),
 	}
 	return handler, nil
@@ -48,6 +50,9 @@ func NewDirectoryHandler(path string) (*DirectoryHandler, error) {
 func (dh *DirectoryHandler) StorePiece(index int, data []byte, resCh chan<- *StoreResult) {
 	go func() {
 		err := storePiece(dh.piecesPath, index, data)
+		if err != nil {
+			dh.cache.Put(index, data)
+		}
 		resCh <- &StoreResult{
 			Index: index,
 			Err:   err,
@@ -56,6 +61,17 @@ func (dh *DirectoryHandler) StorePiece(index int, data []byte, resCh chan<- *Sto
 }
 
 func (dh *DirectoryHandler) RetrievePiece(index int, resCh chan<- *RetrieveResult) {
+	data := dh.cache.Get(index)
+	if data != nil {
+		res := &RetrieveResult{
+			Index: index,
+			Data:  data,
+			Err:   nil,
+		}
+		resCh <- res
+		return
+	}
+
 	dh.requestsMx.Lock()
 	channels, exists := dh.retrieveRequests[index]
 	if exists {
@@ -73,6 +89,8 @@ func (dh *DirectoryHandler) retrieveAndSendPiece(index int) {
 	pieceData, err := retrievePiece(dh.piecesPath, index)
 	if err != nil {
 		logs.Error("Storage", "Failed to retrieve piece %d. Error: %s", index, err)
+	} else {
+		dh.cache.Put(index, pieceData)
 	}
 
 	dh.requestsMx.Lock()
