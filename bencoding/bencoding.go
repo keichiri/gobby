@@ -5,10 +5,9 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
-	"unicode"
 )
 
-func Bencode(item interface{}) ([]byte, error) {
+func Encode(item interface{}) ([]byte, error) {
 	switch t := item.(type) {
 	case int:
 		return bencodeInt(t), nil
@@ -38,7 +37,7 @@ func bencodeList(l []interface{}) ([]byte, error) {
 	bencodedChunks = append(bencodedChunks, []byte("l"))
 
 	for _, item := range l {
-		bencodedItem, err := Bencode(item)
+		bencodedItem, err := Encode(item)
 		if err != nil {
 			return nil, err
 		}
@@ -55,7 +54,7 @@ func bencodeMap(m map[string]interface{}) ([]byte, error) {
 
 	for k, v := range m {
 		bencodedK := bencodeBytes([]byte(k))
-		bencodedV, err := Bencode(v)
+		bencodedV, err := Encode(v)
 		if err != nil {
 			return nil, err
 		}
@@ -67,8 +66,8 @@ func bencodeMap(m map[string]interface{}) ([]byte, error) {
 	return bytes.Join(bencodedChunks, nil), nil
 }
 
-func Bdecode(data []byte) (interface{}, error) {
-	item, leftover, err := decode(data)
+func Decode(data []byte) (interface{}, error) {
+	item, leftover, err := bdecode(data)
 	if err != nil {
 		return nil, err
 	}
@@ -80,7 +79,7 @@ func Bdecode(data []byte) (interface{}, error) {
 	return item, nil
 }
 
-func decode(data []byte) (interface{}, []byte, error) {
+func bdecode(data []byte) (interface{}, []byte, error) {
 	firstByte := data[0]
 	switch {
 	case firstByte == 'i':
@@ -110,7 +109,7 @@ func decodeInt(data []byte) (int, []byte, error) {
 	return result, split[1], nil
 }
 
-func decodeBytes(data []byte) (interface{}, []byte, error) {
+func decodeBytes(data []byte) ([]byte, []byte, error) {
 	split := bytes.SplitN(data, []byte(":"), 2)
 	if len(split) != 2 {
 		return nil, nil, fmt.Errorf("Failed to find string length end. Left: %d", len(data))
@@ -125,18 +124,7 @@ func decodeBytes(data []byte) (interface{}, []byte, error) {
 		return nil, nil, fmt.Errorf("String too short. Left: %d. Expected: %d", len(split[1]), length)
 	}
 
-	result := split[1][:length]
-	isAscii := true
-	for _, byteValue := range result {
-		if byteValue > unicode.MaxASCII {
-			isAscii = false
-		}
-	}
-	if isAscii {
-		return string(result), split[1][length:], nil
-	} else {
-		return result, split[1][length:], nil
-	}
+	return split[1][:length], split[1][length:], nil
 }
 
 func decodeList(data []byte) ([]interface{}, []byte, error) {
@@ -145,7 +133,7 @@ func decodeList(data []byte) ([]interface{}, []byte, error) {
 	var err error
 
 	for data[0] != 'e' {
-		item, data, err = decode(data)
+		item, data, err = bdecode(data)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -166,18 +154,13 @@ func decodeMap(data []byte) (map[string]interface{}, []byte, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		switch _key.(type) {
-		case []byte:
-			return nil, nil, fmt.Errorf("Invalid map key: %v. Left: %d", _key, len(data))
-		case string:
-		}
+		key := _key.([]byte)
 
-		value, data, err = decode(data)
+		value, data, err = bdecode(data)
 		if err != nil {
 			return nil, nil, err
 		}
-		key := _key.(string)
-		m[key] = value
+		m[string(key)] = value
 	}
 
 	return m, data[1:], nil

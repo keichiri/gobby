@@ -5,14 +5,14 @@ import (
 	"testing"
 )
 
-func TestBencodeInt(t *testing.T) {
+func TestEncodeInt(t *testing.T) {
 	inputs := []interface{}{0, 1, -1, 10000000}
 	expectedOutputs := []string{"i0e", "i1e", "i-1e", "i10000000e"}
 
 	for i, input := range inputs {
-		output, err := Bencode(input)
+		output, err := Encode(input)
 		if err != nil {
-			t.Fatalf("Failed to bencode input. Error: %s", err)
+			t.Fatalf("Failed to Encode input. Error: %s", err)
 		}
 		expectedOutput := []byte(expectedOutputs[i])
 		if !bytes.Equal(output, expectedOutput) {
@@ -21,14 +21,14 @@ func TestBencodeInt(t *testing.T) {
 	}
 }
 
-func TestBencodeBytes(t *testing.T) {
+func TestEncodeBytes(t *testing.T) {
 	inputs := []interface{}{[]byte{}, []byte{1, 2, 3, 4, 5}, []byte("spam")}
 	expectedOutputs := []string{"0:", "5:\x01\x02\x03\x04\x05", "4:spam"}
 
 	for i, input := range inputs {
-		output, err := Bencode(input)
+		output, err := Encode(input)
 		if err != nil {
-			t.Fatalf("Failed to bencode input. Error: %s", err)
+			t.Fatalf("Failed to Encode input. Error: %s", err)
 		}
 		expectedOutput := []byte(expectedOutputs[i])
 		if !bytes.Equal(output, expectedOutput) {
@@ -37,14 +37,14 @@ func TestBencodeBytes(t *testing.T) {
 	}
 }
 
-func TestBencodeString(t *testing.T) {
+func TestEncodeString(t *testing.T) {
 	inputs := []interface{}{"", "\x01\x02\x03\x04\x05", "spam"}
 	expectedOutputs := []string{"0:", "5:\x01\x02\x03\x04\x05", "4:spam"}
 
 	for i, input := range inputs {
-		output, err := Bencode(input)
+		output, err := Encode(input)
 		if err != nil {
-			t.Fatalf("Failed to bencode input. Error: %s", err)
+			t.Fatalf("Failed to Encode input. Error: %s", err)
 		}
 		expectedOutput := []byte(expectedOutputs[i])
 		if !bytes.Equal(output, expectedOutput) {
@@ -53,7 +53,7 @@ func TestBencodeString(t *testing.T) {
 	}
 }
 
-func TestBencodeList(t *testing.T) {
+func TestEncodeList(t *testing.T) {
 	inputs := []interface{}{
 		[]interface{}{},
 		[]interface{}{[]interface{}{[]interface{}{}}},
@@ -62,9 +62,9 @@ func TestBencodeList(t *testing.T) {
 	expectedOutputs := []string{"le", "llleee", "li1e4:spamd3:foo3:baree"}
 
 	for i, input := range inputs {
-		output, err := Bencode(input)
+		output, err := Encode(input)
 		if err != nil {
-			t.Fatalf("Failed to bencode input. Error: %s", err)
+			t.Fatalf("Failed to Encode input. Error: %s", err)
 		}
 		expectedOutput := []byte(expectedOutputs[i])
 		if !bytes.Equal(output, expectedOutput) {
@@ -73,7 +73,7 @@ func TestBencodeList(t *testing.T) {
 	}
 }
 
-func TestBencodeMap(t *testing.T) {
+func TestEncodeMap(t *testing.T) {
 	inputs := []interface{}{
 		map[string]interface{}{},
 		map[string]interface{}{"foo": map[string]interface{}{"bar": map[string]interface{}{}}},
@@ -86,9 +86,9 @@ func TestBencodeMap(t *testing.T) {
 	expectedOutputs := []string{"de", "d3:food3:bardeee", "d3:food3:barli1ei2ed4:spam4:eggseeee"}
 
 	for i, input := range inputs {
-		output, err := Bencode(input)
+		output, err := Encode(input)
 		if err != nil {
-			t.Fatalf("Failed to bencode input. Error: %s", err)
+			t.Fatalf("Failed to Encode input. Error: %s", err)
 		}
 		expectedOutput := []byte(expectedOutputs[i])
 		if !bytes.Equal(output, expectedOutput) {
@@ -97,14 +97,14 @@ func TestBencodeMap(t *testing.T) {
 	}
 }
 
-func TestBdecodeInt(t *testing.T) {
+func TestDecodeInt(t *testing.T) {
 	expectedOutputs := []int{0, 1, -1, 10000000}
 	inputs := []string{"i0e", "i1e", "i-1e", "i10000000e"}
 
 	for i, input := range inputs {
-		_output, err := Bdecode([]byte(input))
+		_output, err := Decode([]byte(input))
 		if err != nil {
-			t.Fatalf("Failed to bencode input. Error: %s", err)
+			t.Fatalf("Failed to Encode input. Error: %s", err)
 		}
 		output := _output.(int)
 		expectedOutput := expectedOutputs[i]
@@ -114,31 +114,31 @@ func TestBdecodeInt(t *testing.T) {
 	}
 }
 
-func TestBdecodeBytes(t *testing.T) {
+func TestDecodeBytes(t *testing.T) {
 	expectedOutputs := []string{"", "\x01\x02\x03\x04\x05", "spam"}
 	inputs := []string{"0:", "5:\x01\x02\x03\x04\x05", "4:spam"}
 
 	for i, input := range inputs {
-		_output, err := Bdecode([]byte(input))
+		_output, err := Decode([]byte(input))
 		if err != nil {
-			t.Fatalf("Failed to bencode input. Error: %s", err)
+			t.Fatalf("Failed to Encode input. Error: %s", err)
 		}
-		output := _output.(string)
-		expectedOutput := expectedOutputs[i]
-		if expectedOutput != output {
+		output := _output.([]byte)
+		expectedOutput := []byte(expectedOutputs[i])
+		if !bytes.Equal(output, expectedOutput) {
 			t.Fatalf("Expected %v. Got: %v", expectedOutput, output)
 		}
 	}
 }
 
-func TestBdecodeList(t *testing.T) {
-	expectedOutput := []interface{}{1, "spam", 4}
+func TestDecodeList(t *testing.T) {
+	expectedOutput := []interface{}{1, 4}
 
-	input := []byte("li1e4:spami4ee")
+	input := []byte("li1ei4ee")
 
-	_output, err := Bdecode(input)
+	_output, err := Decode(input)
 	if err != nil {
-		t.Fatalf("Failed to bencode input. Error: %s", err)
+		t.Fatalf("Failed to Encode input. Error: %s", err)
 	}
 	output := _output.([]interface{})
 
@@ -149,14 +149,14 @@ func TestBdecodeList(t *testing.T) {
 	}
 }
 
-func TestBdecodeMap(t *testing.T) {
-	expectedOutput := map[string]interface{}{"foo": "bar"}
+func TestDecodeMap(t *testing.T) {
+	expectedOutput := map[string]interface{}{"foo": 3}
 
-	input := []byte("d3:foo3:bare")
+	input := []byte("d3:fooi3ee")
 
-	_output, err := Bdecode(input)
+	_output, err := Decode(input)
 	if err != nil {
-		t.Fatalf("Failed to bencode input. Error: %s", err)
+		t.Fatalf("Failed to Encode input. Error: %s", err)
 	}
 	output := _output.(map[string]interface{})
 
