@@ -2,19 +2,24 @@ package announcing
 
 import (
 	"fmt"
-	"gobby"
 	"gobby/bencoding"
 	"gobby/logs"
-	"gobby/stats"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 )
 
 const (
 	_HTTP_TIMEOUT = time.Second * 5
 )
+
+type httpAdapter struct {
+	url       string
+	trackerID string
+	client    *http.Client
+}
 
 func setupClient() *http.Client {
 	transport := &http.Transport{}
@@ -24,86 +29,16 @@ func setupClient() *http.Client {
 	}
 }
 
-type httpAnnouncer struct {
-	url          string
-	stats        *stats.Stats
-	downloadInfo *gobby.DownloadInfo
-	client       *http.Client
-	trackerID    string
-	signalCh     chan bool
-}
-
-func NewHTTPAnnouncer(url string, info *gobby.DownloadInfo) *httpAnnouncer {
-	return &httpAnnouncer{
-		url:          url,
-		downloadInfo: info,
-		client:       setupClient(),
-		signalCh:     make(chan bool),
+func newHTTPAdapter(url string) *httpAdapter {
+	return &httpAdapter{
+		url:    url,
+		client: setupClient(),
 	}
 }
 
-func (a *httpAnnouncer) Stop() {
-	a.signalCh <- true
-}
-
-func (a *httpAnnouncer) AnnounceCompletion() {
-	a.signalCh <- false
-}
-
-// TODO - rethink this API
-// Might make more sense to have a reference on a Coordinator and interface
-// via method call instead of having a channel
-func (a *httpAnnouncer) Announcing(resultCh chan<- *AnnounceResult) error {
-	var res *AnnounceResult
-	var err error
-	var interval int
-
-	logs.Debug("Announcer", "Starting announcer to %s", a.url)
-	res, interval, err = a.announce("started")
-	if err != nil {
-		close(resultCh)
-		return fmt.Errorf("Failed to announce started: %s", err)
-	}
-
-	resultCh <- res
-
-	for {
-		select {
-		case <-time.After(time.Second * time.Duration(interval)):
-			logs.Debug("Announcer", "Announcing regularly to %s", a.url)
-			res, interval, err = a.announce("")
-			if err != nil {
-				close(resultCh)
-				return fmt.Errorf("Failed to announce regularly: %s", err)
-			}
-
-			resultCh <- res
-		case signal := <-a.signalCh:
-			// signifies stop
-			if signal {
-				logs.Debug("Announcer", "Announcing stopped to %s", a.url)
-				a.announce("stopped")
-				close(resultCh)
-				break
-			} else {
-				logs.Debug("Announcer", "Announcing completed to %s", a.url)
-				res, interval, err = a.announce("completed")
-				if err != nil {
-					close(resultCh)
-					return fmt.Errorf("Failed to announce completed: %s", err)
-				}
-
-				resultCh <- res
-			}
-		}
-	}
-
-	return nil
-}
-
-func (a *httpAnnouncer) announce(event string) (*AnnounceResult, int, error) {
-	params := a.collectParams(event)
-	queryString := params.Encode()
+func (a *httpAdapter) Announce(params map[string]interface{}) (*AnnounceResult, int, error) {
+	urlParams := a.processParams(params)
+	queryString := urlParams.Encode()
 	fullURL := a.url + "?" + queryString
 	resp, err := a.client.Get(fullURL)
 	if err != nil {
@@ -126,10 +61,32 @@ func (a *httpAnnouncer) announce(event string) (*AnnounceResult, int, error) {
 	}
 
 	logs.Debug("Announcer", "Raw tracker response from %s: %v", a.url, decodedResponse)
-	return a.readTrackerResponse(decodedResponse)
+	return a.parseTrackerResponse(decodedResponse)
 }
 
-func (a *httpAnnouncer) readTrackerResponse(response map[string]interface{}) (*AnnounceResult, int, error) {
+func (a *httpAdapter) processParams(params map[string]interface{}) *url.Values {
+	urlValues := &url.Values{}
+	urlValues.Set("info_hash", string(params["infoHash"].([]byte)))
+	urlValues.Set("peer_id", string(params["peerID"].([]byte)))
+	urlValues.Set("port", params["port"].(string))
+	if event := params["event"].(string); event != "" {
+		urlValues.Set("event", event)
+	}
+
+	urlValues.Set("downloaded", strconv.Itoa(params["downloaded"].(int)))
+	urlValues.Set("uploaded", strconv.Itoa(params["uploaded"].(int)))
+	urlValues.Set("left", strconv.Itoa(params["left"].(int)))
+	urlValues.Set("compact", "1")
+	urlValues.Set("numwant", strconv.Itoa(params["numwant"].(int)))
+
+	if a.trackerID != "" {
+		urlValues.Set("trackerid", a.trackerID)
+	}
+
+	return urlValues
+}
+
+func (a *httpAdapter) parseTrackerResponse(response map[string]interface{}) (*AnnounceResult, int, error) {
 	_complete, exists := response["complete"]
 	if !exists {
 		return nil, 0, fmt.Errorf("Missing tracker response field: complete. Response: %v", response)
@@ -183,26 +140,4 @@ func (a *httpAnnouncer) readTrackerResponse(response map[string]interface{}) (*A
 	}
 
 	return announceResult, interval, nil
-}
-
-func (a *httpAnnouncer) collectParams(event string) *url.Values {
-	params := &url.Values{}
-	currentStats := a.stats.GetCurrent()
-
-	params.Set("info_hash", string(a.downloadInfo.InfoHash))
-	params.Set("peer_id", string(a.downloadInfo.PeerID))
-	params.Set("port", a.downloadInfo.Port)
-	if event != "" {
-		params.Set("event", event)
-	}
-	params.Set("downloaded", string(currentStats.Downloaded))
-	params.Set("uploaded", string(currentStats.Uploaded))
-	params.Set("left", string(currentStats.Left))
-	params.Set("numwant", "20") // TODO
-	params.Set("compact", "1")
-	if a.trackerID != "" {
-		params.Set("trackerid", a.trackerID)
-	}
-
-	return params
 }
