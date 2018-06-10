@@ -68,7 +68,7 @@ func (a *httpAdapter) processParams(params map[string]interface{}) *url.Values {
 	urlValues := &url.Values{}
 	urlValues.Set("info_hash", string(params["infoHash"].([]byte)))
 	urlValues.Set("peer_id", string(params["peerID"].([]byte)))
-	urlValues.Set("port", params["port"].(string))
+	urlValues.Set("port", strconv.Itoa(int(params["port"].(int16))))
 	if event := params["event"].(string); event != "" {
 		urlValues.Set("event", event)
 	}
@@ -77,7 +77,8 @@ func (a *httpAdapter) processParams(params map[string]interface{}) *url.Values {
 	urlValues.Set("uploaded", strconv.Itoa(params["uploaded"].(int)))
 	urlValues.Set("left", strconv.Itoa(params["left"].(int)))
 	urlValues.Set("compact", "1")
-	urlValues.Set("numwant", strconv.Itoa(params["numwant"].(int)))
+	urlValues.Set("numwant", strconv.Itoa(int(params["numwant"].(int32))))
+	urlValues.Set("key", strconv.Itoa(int(params["key"].(int32))))
 
 	if a.trackerID != "" {
 		urlValues.Set("trackerid", a.trackerID)
@@ -134,10 +135,12 @@ func (a *httpAdapter) parseTrackerResponse(response map[string]interface{}) (*An
 	}
 
 	announceResult := &AnnounceResult{
-		Complete:   complete,
-		Incomplete: incomplete,
+		Complete:   int32(complete),
+		Incomplete: int32(incomplete),
 		PeerData:   peerData,
 	}
 
 	return announceResult, interval, nil
 }
+
+func (a *httpAdapter) Close() {}

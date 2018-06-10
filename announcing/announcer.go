@@ -26,6 +26,11 @@ func NewAnnouncer(trackerURL string, info *gobby.DownloadInfo, s *stats.Stats) (
 	var adapter trackerAdapter
 	if res.Scheme == "http" || res.Scheme == "https" {
 		adapter = newHTTPAdapter(trackerURL)
+	} else if res.Scheme == "udp" {
+		adapter, err = newUDPAdapter(res.Hostname(), res.Port())
+		if err != nil {
+			return nil, err
+		}
 	} else {
 		return nil, fmt.Errorf("Unsupported tracker protocol: %s", res.Scheme)
 	}
