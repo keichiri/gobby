@@ -6,7 +6,7 @@ import (
 )
 
 func TestEncodingDecoding(t *testing.T) {
-	messages := []PWPMessage{
+	messages := []Message{
 		&BitfieldMsg{[]byte("this is a test bitfield")},
 		&KeepAliveMsg{},
 		&HaveMsg{500000},
@@ -87,7 +87,7 @@ func TestEncodingDecoding(t *testing.T) {
 }
 
 func TestEncodingIfInvalidMessage(t *testing.T) {
-	messages := []PWPMessage{
+	messages := []Message{
 		&BitfieldMsg{[]byte("this is a test bitfield")},
 		&KeepAliveMsg{},
 		&HaveMsg{500000},

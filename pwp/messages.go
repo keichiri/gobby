@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-type PWPMessage interface {
+type Message interface {
 	Encode() []byte
 }
 
@@ -108,8 +108,8 @@ func (m *CancelMsg) Encode() []byte {
 	return buf.Bytes()
 }
 
-func DecodeMessages(data []byte) ([]PWPMessage, []byte, error) {
-	messages := make([]PWPMessage, 0)
+func DecodeMessages(data []byte) ([]Message, []byte, error) {
+	messages := make([]Message, 0)
 
 	for {
 		if len(data) < 4 {
@@ -139,7 +139,7 @@ func DecodeMessages(data []byte) ([]PWPMessage, []byte, error) {
 	return messages, data, nil
 }
 
-func decodeMessage(data []byte) (PWPMessage, error) {
+func decodeMessage(data []byte) (Message, error) {
 	switch data[0] {
 	case 0:
 		if len(data) > 1 {
